@@ -7046,6 +7046,21 @@ def test_spacetodepth():
     test_invalid_block_size()
     test_invalid_depth_dim()
 
+@with_seed()
+def test_einsum():
+    a = mx.nd.ones((10, 10))
+    print(mx.nd.einsum('ii->', a).shape)
+
+    b = mx.nd.ones(4)
+    c = mx.nd.ones(5)
+    print(mx.nd.einsum('i,j->ij', b, c))
+
+    a = mx.nd.ones((10, 12, 13))
+    b = mx.nd.ones((12, 14))
+    c = mx.nd.ones((10, 13))
+    res = mx.nd.einsum('ijk,jl,ik->il', a, b, c)
+    assert(res.shape == (10, 14))
+
 if __name__ == '__main__':
     import nose
     nose.runmodule()

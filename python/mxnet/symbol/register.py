@@ -17,12 +17,13 @@
 
 # pylint: disable=unused-import
 """Register backend ops in mxnet.symbol namespace."""
-import os as _os
-import ctypes
-import numpy as np
+
 import sys
 import functools
 import inspect
+import os as _os
+import ctypes
+import numpy as np
 
 from . import _internal
 from ._internal import SymbolBase, _symbol_creator
@@ -203,7 +204,9 @@ def _generate_symbol_hybrid_function_code(func_name, func):
     signature = str(inspect.signature(symbol_function))
     doc_str = """
 def %s%s:
+    \"\"\"
     %s
+    \"\"\"
     return None
     """ % (func_name, signature, symbol_function.__doc__)
     return doc_str

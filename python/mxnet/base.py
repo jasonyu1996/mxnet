@@ -29,6 +29,7 @@ import inspect
 import platform
 import numpy as np
 from .hybrid_op import _HYBRID_OP_REGISTRY
+from . import ops
 
 from . import libinfo
 

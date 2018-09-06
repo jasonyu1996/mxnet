@@ -17,11 +17,11 @@
 
 """Register backend ops in mxnet.ndarray namespace"""
 import os as _os
-import ctypes
-import numpy as np  # pylint: disable=unused-import
 import functools
 import inspect
 import sys
+import ctypes
+import numpy as np  # pylint: disable=unused-import
 
 from ._internal import NDArrayBase, _imperative_invoke # pylint: disable=unused-import
 from ..ndarray_doc import _build_doc, _build_hybrid_doc
@@ -160,7 +160,9 @@ def _generate_ndarray_hybrid_function_code(func_name, func):
     signature = str(inspect.signature(ndarray_function))
     doc_str = """
 def %s%s:
+    \"\"\"
     %s
+    \"\"\"
     return None
     """ % (func_name, signature, ndarray_function.__doc__)
     return doc_str
