@@ -20,12 +20,15 @@
 import os as _os
 import ctypes
 import numpy as np
+import sys
+import functools
+import inspect
 
 from . import _internal
 from ._internal import SymbolBase, _symbol_creator
 from ..attribute import AttrScope
 from ..base import mx_uint, check_call, _LIB, py_str
-from ..symbol_doc import _build_doc
+from ..symbol_doc import _build_doc, _build_hybrid_doc
 from ..base import _Null, _init_op_module
 from ..name import NameManager
 # pylint: enable=unused-import
@@ -194,6 +197,17 @@ def %s(%s):"""%(func_name, ', '.join(signature)))
     code.insert(1, doc_str_lines)
     return ''.join(code), doc_str
 
+def _generate_symbol_hybrid_function_code(func_name, func):
+    """Generate function for ndarray hybrid op."""
+    symbol_function = _make_symbol_hybrid_function(func_name, func)
+    signature = str(inspect.signature(symbol_function))
+    doc_str = """
+def %s%s:
+    %s
+    return None
+    """ % (func_name, signature, symbol_function.__doc__)
+    return doc_str
+
 
 def _make_symbol_function(handle, name, func_name):
     """Create a symbol function by handle and function name."""
@@ -207,4 +221,14 @@ def _make_symbol_function(handle, name, func_name):
     symbol_function.__module__ = 'mxnet.symbol'
     return symbol_function
 
-_init_op_module('mxnet', 'symbol', _make_symbol_function)
+def _make_symbol_hybrid_function(func_name, func):
+    """Create a symbol function from a hybrid operator function."""
+    module = sys.modules['mxnet.symbol']
+    symbol_function = functools.partial(func, module)
+    symbol_function.__name__ = func_name
+    symbol_function.__doc__ = _build_hybrid_doc(func)
+    symbol_function.__module__ = 'mxnet.symbol'
+    return symbol_function
+
+
+_init_op_module('mxnet', 'symbol', _make_symbol_function, _make_symbol_hybrid_function)

@@ -19,9 +19,12 @@
 import os as _os
 import ctypes
 import numpy as np  # pylint: disable=unused-import
+import functools
+import inspect
+import sys
 
 from ._internal import NDArrayBase, _imperative_invoke # pylint: disable=unused-import
-from ..ndarray_doc import _build_doc
+from ..ndarray_doc import _build_doc, _build_hybrid_doc
 
 from ..base import mx_uint, check_call, _LIB, py_str, _init_op_module, _Null # pylint: disable=unused-import
 
@@ -151,10 +154,21 @@ def %s(%s):"""%(func_name, ', '.join(signature)))
     code.insert(1, doc_str_lines)
     return ''.join(code), doc_str
 
+def _generate_ndarray_hybrid_function_code(func_name, func):
+    """Generate function for ndarray hybrid op."""
+    ndarray_function = _make_ndarray_hybrid_function(func_name, func)
+    signature = str(inspect.signature(ndarray_function))
+    doc_str = """
+def %s%s:
+    %s
+    return None
+    """ % (func_name, signature, ndarray_function.__doc__)
+    return doc_str
+
 
 # pylint: disable=too-many-locals, invalid-name
 def _make_ndarray_function(handle, name, func_name):
-    """Create a NDArray function from the FunctionHandle."""
+    """Create an NDArray function from the FunctionHandle."""
     code, doc_str = _generate_ndarray_function_code(handle, name, func_name)
 
     local = {}
@@ -165,4 +179,13 @@ def _make_ndarray_function(handle, name, func_name):
     ndarray_function.__module__ = 'mxnet.ndarray'
     return ndarray_function
 
-_init_op_module('mxnet', 'ndarray', _make_ndarray_function)
+def _make_ndarray_hybrid_function(func_name, func):
+    """Create an NDArray function from a hybrid operator function."""
+    module = sys.modules['mxnet.ndarray']
+    ndarray_function = functools.partial(func, module)
+    ndarray_function.__name__ = func_name
+    ndarray_function.__doc__ = _build_hybrid_doc(func)
+    ndarray_function.__module__ = 'mxnet.ndarray'
+    return ndarray_function
+
+_init_op_module('mxnet', 'ndarray', _make_ndarray_function, _make_ndarray_hybrid_function)

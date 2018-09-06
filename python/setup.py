@@ -51,10 +51,12 @@ sys.path.insert(0, CURRENT_DIR)
 # Try to generate auto-complete code
 try:
     from mxnet.base import _generate_op_module_signature
-    from mxnet.ndarray.register import _generate_ndarray_function_code
-    from mxnet.symbol.register import _generate_symbol_function_code
-    _generate_op_module_signature('mxnet', 'symbol', _generate_symbol_function_code)
-    _generate_op_module_signature('mxnet', 'ndarray', _generate_ndarray_function_code)
+    from mxnet.ndarray.register import _generate_ndarray_function_code, _generate_ndarray_hybrid_function_code
+    from mxnet.symbol.register import _generate_symbol_function_code, _generate_symbol_hybrid_function_code
+    _generate_op_module_signature('mxnet', 'symbol', _generate_symbol_function_code, \
+        _generate_symbol_hybrid_function_code)
+    _generate_op_module_signature('mxnet', 'ndarray', _generate_ndarray_function_code, \
+        _generate_ndarray_hybrid_function_code)
 except: # pylint: disable=bare-except
     pass
 

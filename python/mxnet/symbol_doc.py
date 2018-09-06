@@ -248,6 +248,12 @@ def _build_doc(func_name,
     doc_str = _re.sub('NDArray-or-Symbol', 'Symbol', doc_str)
     return doc_str
 
+def _build_hybrid_doc(func):
+    """Build docstring for hybrid operator functions."""
+    if func.__doc__ is None:
+        return None
+    return func.__doc__.replace('<HybridType>', 'Symbol')
+
 
 class ConcatDoc(SymbolDoc):
     """
