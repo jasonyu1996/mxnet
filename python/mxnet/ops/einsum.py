@@ -24,7 +24,10 @@ from collections import Counter
 from ..hybrid_op import _register_hybrid_op
 
 _EINSUM_PATTERN = re.compile(r"^([a-z]+)((?:,[a-z]+)*)(?:->([a-z]*))?$")
-
+# For ellipsis support
+#  _EINSUM_PATTERN = re.compile(r"^([a-z]*(?:\.\.\.|[a-z])[a-z]*)" + \
+#            r"((?:,[a-z]*(?:\.\.\.|[a-z])[a-z]*)*)" + \
+#            r"(?:->([a-z]*(?:\.\.\.)?[a-z]*))?$")
 
 def _reduce(F, dat, ins, keep):
     invert_map = dict(zip(ins, range(0, len(ins))))
@@ -76,17 +79,102 @@ def _keep_set(counter):
 @_register_hybrid_op('einsum')
 def _einsum(F, equation, *data, out=None, name=None):
     """
-    Performing summation defined by the Eintein notation.
+    Performing summation defined by the Einstein notation.
+
+    The first parameter `equation` describes how the output would
+    be computed given the input tensors. The full expression of
+    an `equation` would be ``I->O`` where ``I`` is a list of
+    comma-separated axis subscripts for the input tensors, and
+    ``O`` specifies the axis subcripts for the output tensor.
+    All subscripts should be lowercase Latin letters. To compute
+    the output tensor, input axes sharing the same subscript would
+    be multiplied together if across different tensors or taken the
+    corresponding diagonal otherwise, after which those with
+    subscripts out of ``O`` would be further reduced by summation.
+
+    It is allowed to use ``I`` only as ``equation``. It would be
+    equivalent to ``I->O`` where ``O`` is constructed by alphabetically
+    arranging all subscripts that appear in exactly one input tensor.
+
+    To better understand the behaviour of this operator, please
+    read the examples provided below.
+
+    .. note:: The current implementation contracts input tensors
+        from left to right, eliminating axes whenever possible.
+        Knowing these details would sometimes be crucial for
+        efficient use of this operator.
+
+    .. note:: Equations with ellipsis (...), as in `numpy.einsum`,
+        are not supported.
+
+    Paremeters
+    ---------
+    equation : string
+        the equation to evaluate
+
+    data : list of <HybridType>s
+        the input operands of this operation
+
+    Returns
+    ---------
+    The evaluation result.
+
+    Return type
+    ---------
+    <HybridType>
+
+    Examples
+    ---------
+    >>> x = nd.arange(4)
+    >>> y = nd.arange(4)
+    >>> x.asnumpy()
+    array([0., 1., 2., 3.], dtype=float32)
+    >>> y.asnumpy()
+    array([0., 1., 2., 3.], dtype=float32)
+    >>> nd.einsum('i,i', a, b).asnumpy()        # inner product
+    array([14.], dtype=float32)
+    >>> nd.einsum('i,i->i', a, b).asnumpy()     # element-wise product
+    array([0., 1., 4., 9.], dtype=float32)
+    >>> nd.einsum('i,j', a, b).asnumpy()        # outer product
+    array([[0., 0., 0., 0.],
+           [0., 1., 2., 3.],
+           [0., 2., 4., 6.],
+           [0., 3., 6., 9.]], dtype=float32)
+    >>> x = x.reshape((2, 2))
+    >>> x.asnumpy()
+    array([[0., 1.],
+           [2., 3.]], dtype=float32)
+    >>> nd.einsum('ii->i', x).asnumpy()         # diagonal
+    array([0., 3.], dtype=float32)
+    >>> nd.einsum('ii->', x).asnumpy()          # trace
+    array([3.], dtype=float32)
+    >>> nd.einsum('ij->ji', x).asnumpy()        # transpose
+    array([[0., 2.],
+           [1., 3.]], dtype=float32)
+    >>> x = nd.arange(12)
+    >>> x.asnumpy()
+    array([ 0.,  1.,  2.,  3.,  4.,  5.,  6.,  7.,  8.,  9., 10., 11.],
+        dtype=float32)
+    >>> x = x.reshape((2, 2, 3))
+    >>> y = x.reshape((2, 3, 2))
+    >>> nd.einsum('bij,bjk->bik', x, y).asnumpy()
+    array([[[ 10.,  13.],
+            [ 28.,  40.]],
+
+           [[172., 193.],
+            [244., 274.]]], dtype=float32)
     """
     equation = equation.replace(' ', '')
     match = _EINSUM_PATTERN.match(equation)
     if not match:
         raise ValueError('einsum equation invalid!')
+    if equation.find('...') != -1:
+        raise ValueError('Ellipsis not supported yet!')
     ins1, ins2, outs = match.groups(default='')
     ins = [ins1] + [sub for sub in ins2.split(',') if sub]
     if len(ins) != len(data):
         raise ValueError(('The number of einsum inputs %d and the number of ' + \
-            'input subscripts %d unequal!') % \
+            'input subscripts %d mismatched!') % \
             (len(data), len(ins)))
     # all subscripts that appear in inputs
     in_used = set()
@@ -124,12 +212,16 @@ def _einsum(F, equation, *data, out=None, name=None):
         data[i] = new_data
         ins[i] = new_ins
 
-    if not outs and equation.find('->') == -1:
-        outs = ''.join(sorted(in_used))
-
-    axis_keep = Counter(outs)
-    for i in range(1, n_input):
+    axis_keep = Counter()
+    for i in range(0, n_input):
         axis_keep.update(ins[i])
+
+    if not outs and equation.find('->') == -1:
+        outs = ''.join(sorted([sub for sub, c in axis_keep.items() if c == 1]))
+
+    axis_keep.update(outs)
+    axis_keep.subtract(ins[0])
+
     tmp_ans = data[0]
     tmp_ins = ins[0]
     tmp_ans, tmp_ins = _reduce(F, tmp_ans, tmp_ins, _keep_set(axis_keep))
