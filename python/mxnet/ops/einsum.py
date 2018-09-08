@@ -76,10 +76,20 @@ def _contract_pair(F, a, b, a_sub, b_sub, keep):
 def _keep_set(counter):
     return set([sub for sub, c in counter.items() if c > 0])
 
+def _shift_axes(F, data, a, b):
+    """
+    Right shifts axes of data between a and b (inclusive).
+    """
+    if a == b:
+        return data
+    new_order = tuple(range(0, a)) + (b,) + tuple(range(a, b)) + tuple(range(b + 1, data.ndim))
+    return F.transpose(data, axes=new_order)
+
+
 @_register_hybrid_op('einsum')
 def _einsum(F, equation, *data, out=None, name=None):
     """
-    Performing summation defined by the Einstein notation.
+    Performs summation defined by the Einstein notation.
 
     The first parameter `equation` describes how the output would
     be computed given the input tensors. The full expression of
@@ -207,7 +217,7 @@ def _einsum(F, equation, *data, out=None, name=None):
                 new_data = F.diag(new_data, axis1=j, axis2=j - 1)
                 cur_len -= 1
                 if cur_len != j:
-                    new_data = F.swapaxes(new_data, dim1=cur_len - 1, dim2=j - 1)
+                    new_data = _shift_axes(F, new_data, j - 1, cur_len - 1)
                 del new_ins[j]
         data[i] = new_data
         ins[i] = new_ins
@@ -232,9 +242,9 @@ def _einsum(F, equation, *data, out=None, name=None):
         tmp_ans, tmp_ins = _contract_pair(F, tmp_ans, cur_dat, \
             tmp_ins, cur_ins, _keep_set(axis_keep))
 
-    # tmp_ans and tmp_sub now shall contain the answer
-    invert_map = dict(zip(outs, range(0, len(outs))))
-    reordering = [invert_map[sub] for sub in tmp_ins]
+    # transpose to match the output
+    invert_map = dict(zip(tmp_ins, range(0, len(tmp_ins))))
+    reordering = [invert_map[sub] for sub in outs]
     if not reordering:
         reordering = [0]
 

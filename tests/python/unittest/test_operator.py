@@ -7048,18 +7048,28 @@ def test_spacetodepth():
 
 @with_seed()
 def test_einsum():
-    a = mx.nd.ones((10, 10))
-    print(mx.nd.einsum('ii->', a).shape)
+    test_cases = [
+        ('ijkl->', [(2, 3, 4, 5)]),                   # sum
+        ('ij,jk', [(4, 5), (5, 6)]),                  # matmul
+        ('ijk->jki', [(2, 3, 4)]),                    # transpose
+        ('ijiki->jik', [(3, 2, 3, 4, 3)]),            # diagonal
+        ('ijik->jk', [(2, 3, 2, 4)]),                 # trace
+        ('bij,bjk->bik', [(5, 2, 3), (5, 3, 4)]),     # batched matmul
+        ('i,j', [(4,), (4,)]),                        # outer product
+        ('i,i', [(5,), (5,)]),                        # inner product
+        ('ijk,ijk->', [(2, 3, 4), (2, 3, 4)]),        # element-wise product
+    ]
 
-    b = mx.nd.ones(4)
-    c = mx.nd.ones(5)
-    print(mx.nd.einsum('i,j->ij', b, c))
-
-    a = mx.nd.ones((10, 12, 13))
-    b = mx.nd.ones((12, 14))
-    c = mx.nd.ones((10, 13))
-    res = mx.nd.einsum('ijk,jl,ik->il', a, b, c)
-    assert(res.shape == (10, 14))
+    for equation, input_shapes in test_cases:
+        print(input_shapes, equation)
+        inputs_np = list(map(lambda x: np.random.normal(size=x), input_shapes))
+        inputs_nd = list(map(lambda x: mx.nd.array(x), inputs_np))
+        print(mx.nd.einsum(equation, *inputs_nd).asnumpy().shape)
+        assert_almost_equal(np.einsum(equation, *inputs_np), \
+            mx.nd.einsum(equation, *inputs_nd).asnumpy())
+        inputs_sym = [mx.sym.Variable('input%d' % i) for i in range(0, len(input_shapes))]
+        out = mx.sym.einsum(equation, *inputs_sym)
+        check_numeric_gradient(out, inputs_np)
 
 if __name__ == '__main__':
     import nose
